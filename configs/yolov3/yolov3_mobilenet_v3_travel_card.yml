@@ -1,0 +1,14 @@
+_BASE_: [
+  '../datasets/travel_card_voc.yml',
+  '../runtime.yml',
+  '_base_/optimizer_travel_card_270e.yml',
+  '_base_/yolov3_travel_card_v3.yml',
+  '_base_/yolov3_reader.yml',
+]
+
+snapshot_epoch: 5
+pretrain_weights:  https://paddledet.bj.bcebos.com/models/pretrained/MobileNetV3_large_x1_0_ssld_pretrained.pdparams
+weights: output/yolov3_mobilenet_v3_travel_card/model_final
+
+EvalReader:
+  collate_batch: false

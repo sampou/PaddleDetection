@@ -1,18 +1,19 @@
 architecture: YOLOv3
-pretrain_weights: https://paddledet.bj.bcebos.com/models/pretrained/MobileNetV1_pretrained.pdparams
+pretrain_weights: https://paddledet.bj.bcebos.com/models/pretrained/MobileNetV3_large_x1_0_ssld_pretrained.pdparams
 norm_type: sync_bn
 
 YOLOv3:
-  backbone: MobileNet
+  backbone: MobileNetV3
   neck: YOLOv3FPN
   yolo_head: YOLOv3Head
   post_process: BBoxPostProcess
 
-MobileNet:
-  scale: 1
-  feature_maps: [4, 6, 13]
+MobileNetV3:
+  model_name: large
+  scale: 1.
   with_extra_blocks: false
   extra_block_filters: []
+  feature_maps: [7, 13, 16]
 
 # use default config
 # YOLOv3FPN:

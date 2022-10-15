@@ -1,6 +1,6 @@
 metric: VOC
 map_type: integral
-num_classes: 1
+num_classes: 2
 
 TrainDataset:
   !VOCDataSet
