@@ -37,6 +37,7 @@ from preprocess import preprocess, Resize, NormalizeImage, Permute, PadStride, L
     decode_image
 from keypoint_preprocess import EvalAffine, TopDownEvalAffine, expand_crop
 from visualize import visualize_box_mask
+from generate_predict import generate_box_mask
 from utils import argsparser, Timer, get_current_memory_mb
 from ppdet.utils.logger import setup_logger as get_logger
 import argparse
@@ -247,6 +248,7 @@ class Detector(object):
                       save_file=None):
         batch_loop_cnt = math.ceil(float(len(image_list)) / self.batch_size)
         results = []
+        distinguishs = []
         for i in range(batch_loop_cnt):
             start_index = i * self.batch_size
             end_index = min((i + 1) * self.batch_size, len(image_list))
@@ -292,6 +294,13 @@ class Detector(object):
                 self.det_times.postprocess_time_s.end()
                 self.det_times.img_num += len(batch_image_list)
 
+                distinguishs.append(
+                    generate_result(
+                        batch_image_list,
+                        result,
+                        self.pred_config.labels,
+                        self.threshold))
+
                 if visual:
                     visualize(
                         batch_image_list,
@@ -309,7 +318,7 @@ class Detector(object):
             self.format_coco_results(image_list, results, save_file=save_file)
 
         results = self.merge_batch_result(results)
-        return results
+        return results, distinguishs
 
     def predict_video(self, video_file, camera_id):
         video_out_name = 'output.mp4'
@@ -843,6 +852,33 @@ def visualize(image_list, result, labels, output_dir='output/', threshold=0.5):
         logger.info("save result to: " + out_path)
 
 
+def generate_result(image_list, result, labels, threshold=0.5):
+    json = []
+    start_idx = 0
+    for idx, image_file in enumerate(image_list):
+        im_bboxes_num = result['boxes_num'][idx]
+        im_results = {}
+        if 'boxes' in result:
+            im_results['boxes'] = result['boxes'][start_idx:start_idx +
+                                                            im_bboxes_num, :]
+        if 'masks' in result:
+            im_results['masks'] = result['masks'][start_idx:start_idx +
+                                                            im_bboxes_num, :]
+        if 'segm' in result:
+            im_results['segm'] = result['segm'][start_idx:start_idx +
+                                                          im_bboxes_num, :]
+        if 'label' in result:
+            im_results['label'] = result['label'][start_idx:start_idx +
+                                                            im_bboxes_num]
+        if 'score' in result:
+            im_results['score'] = result['score'][start_idx:start_idx +
+                                                            im_bboxes_num]
+
+        start_idx += im_bboxes_num
+        im, distinguish = generate_box_mask(image_file, im_results, labels, threshold=threshold)
+        json.append(distinguish)
+    return json
+
 def print_arguments(args):
     logger.debug('-----------  Running Arguments -----------')
     for arg, value in sorted(vars(args).items()):
@@ -886,7 +922,7 @@ def main(args):
         img_list = get_test_images(args.image_dir, args.image_file)
         save_file = os.path.join(args.output_dir,
                                  'results.json') if args.save_results else None
-        results = detector.predict_image(
+        results, distinguishs = detector.predict_image(
             img_list, args.run_benchmark, repeats=100, save_file=save_file)
         if not args.run_benchmark:
             detector.det_times.info(average=True)
@@ -898,6 +934,7 @@ def main(args):
                 'precision': mode.split('_')[-1]
             }
             bench_log(detector, img_list, model_info, name='DET')
+    return distinguishs
 
 
 def parse_arguments(mainRun=True):
@@ -942,7 +979,7 @@ class Predict:
 
         """
 
-        main(self.args)
+        return main(self.args)
 
 
 if __name__ == '__main__':
