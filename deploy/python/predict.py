@@ -23,6 +23,7 @@ import cv2
 import numpy as np
 import paddle
 import yaml
+
 from paddle.inference import Config
 from paddle.inference import create_predictor
 
@@ -37,9 +38,13 @@ from preprocess import preprocess, Resize, NormalizeImage, Permute, PadStride, L
 from keypoint_preprocess import EvalAffine, TopDownEvalAffine, expand_crop
 from visualize import visualize_box_mask
 from utils import argsparser, Timer, get_current_memory_mb
+from ppdet.utils.logger import setup_logger as get_logger
 import argparse
+import logging
 
 __all__ = ['Predict']
+
+logger = get_logger(__name__)
 
 # Global dictionary
 SUPPORT_MODELS = {
@@ -169,7 +174,7 @@ class Detector(object):
         # postprocess output of predictor
         np_boxes_num = result['boxes_num']
         if np_boxes_num[0] <= 0:
-            print('[WARNNING] No object detected.')
+            logger.warning('[WARNNING] No object detected.')
             result = {'boxes': np.zeros([0, 6]), 'boxes_num': [0]}
         result = {k: v for k, v in result.items() if v is not None}
         return result
@@ -297,7 +302,7 @@ class Detector(object):
 
             results.append(result)
             if visual:
-                print('Test iter {}'.format(i))
+                logger.info('Test iter {}'.format(i))
 
         if save_file is not None:
             Path(self.output_dir).mkdir(exist_ok=True)
@@ -318,7 +323,7 @@ class Detector(object):
         height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = int(capture.get(cv2.CAP_PROP_FPS))
         frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-        print("fps: %d, frame_count: %d" % (fps, frame_count))
+        logger.info("fps: %d, frame_count: %d" % (fps, frame_count))
 
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
@@ -330,7 +335,7 @@ class Detector(object):
             ret, frame = capture.read()
             if not ret:
                 break
-            print('detect frame: %d' % (index))
+            logger.debug('detect frame: %d' % (index))
             index += 1
             results = self.predict_image([frame], visual=False)
 
@@ -646,7 +651,7 @@ class PredictConfig():
         if 'fpn_stride' in yml_conf:
             self.fpn_stride = yml_conf['fpn_stride']
         if self.arch == 'RCNN' and yml_conf.get('export_onnx', False):
-            print(
+            logger.warning(
                 'The RCNN export model is used for ONNX and it only supports batch_size = 1'
             )
         self.print_config()
@@ -663,12 +668,12 @@ class PredictConfig():
                                                                       'arch'], SUPPORT_MODELS))
 
     def print_config(self):
-        print('-----------  Model Configuration -----------')
-        print('%s: %s' % ('Model Arch', self.arch))
-        print('%s: ' % ('Transform Order'))
+        logger.debug('-----------  Model Configuration -----------')
+        logger.debug('%s: %s' % ('Model Arch', self.arch))
+        logger.debug('%s: ' % ('Transform Order'))
         for op_info in self.preprocess_infos:
-            print('--%s: %s' % ('transform op', op_info['type']))
-        print('--------------------------------------------')
+            logger.debug('--%s: %s' % ('transform op', op_info['type']))
+        logger.debug('--------------------------------------------')
 
 
 def load_predictor(model_dir,
@@ -729,7 +734,7 @@ def load_predictor(model_dir,
                 if enable_mkldnn_bfloat16:
                     config.enable_mkldnn_bfloat16()
             except Exception as e:
-                print(
+                logger.error(
                     "The current environment does not support `mkldnn`, so disable mkldnn."
                 )
                 pass
@@ -760,7 +765,7 @@ def load_predictor(model_dir,
             }
             config.set_trt_dynamic_shape_info(min_input_shape, max_input_shape,
                                               opt_input_shape)
-            print('trt set dynamic shape done!')
+            logger.debug('trt set dynamic shape done!')
 
     # disable print log when predict
     config.disable_glog_info()
@@ -800,7 +805,7 @@ def get_test_images(infer_dir, infer_img):
     images = list(images)
 
     assert len(images) > 0, "no image found in {}".format(infer_dir)
-    print("Found {} inference images in total.".format(len(images)))
+    logger.info("Found {} inference images in total.".format(len(images)))
 
     return images
 
@@ -835,14 +840,14 @@ def visualize(image_list, result, labels, output_dir='output/', threshold=0.5):
             os.makedirs(output_dir)
         out_path = os.path.join(output_dir, img_name)
         im.save(out_path, quality=95)
-        print("save result to: " + out_path)
+        logger.info("save result to: " + out_path)
 
 
 def print_arguments(args):
-    print('-----------  Running Arguments -----------')
+    logger.debug('-----------  Running Arguments -----------')
     for arg, value in sorted(vars(args).items()):
-        print('%s: %s' % (arg, value))
-    print('------------------------------------------')
+        logger.debug('%s: %s' % (arg, value))
+    logger.debug('------------------------------------------')
 
 
 def main(args):
@@ -897,6 +902,12 @@ def main(args):
 
 def parse_arguments(mainRun=True):
     parser = argsparser()
+    parser.add_argument(
+        "--log_level",
+        type=int,
+        default=logging.INFO,
+        help="log level.")
+
     if mainRun:
         return parser.parse_args()
     else:
@@ -922,6 +933,8 @@ class Predict:
         ), 'To enable mkldnn bfloat, please turn on both enable_mkldnn and enable_mkldnn_bfloat16'
 
         self.args = args
+
+        logger.setLevel(self.args.log_level)
 
     def predict(self):
         """
