@@ -923,7 +923,7 @@ def main(args):
         save_file = os.path.join(args.output_dir,
                                  'results.json') if args.save_results else None
         results, distinguishs = detector.predict_image(
-            img_list, args.run_benchmark, repeats=100, save_file=save_file)
+            img_list, args.run_benchmark, repeats=100, save_file=save_file, visual=args.visual)
         if not args.run_benchmark:
             detector.det_times.info(average=True)
         else:
@@ -944,6 +944,11 @@ def parse_arguments(mainRun=True):
         type=int,
         default=logging.INFO,
         help="log level.")
+    parser.add_argument(
+        "--visual",
+        type=bool,
+        default=False,
+        help="visualize the predict result.")
 
     if mainRun:
         return parser.parse_args()

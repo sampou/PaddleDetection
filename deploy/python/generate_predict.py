@@ -139,7 +139,7 @@ def generate_box(np_boxes, labels, threshold=0.5):
 
         distinguish.append({
             'class_id': int(clsid),
-            'text': labels[clsid],
+            'label': labels[clsid],
             'confidence': score,
             'left': xmin,
             'top': ymin,
